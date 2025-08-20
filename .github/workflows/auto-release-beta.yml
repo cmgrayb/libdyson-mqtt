@@ -1,0 +1,188 @@
+name: "Auto-Release: Beta"
+
+on:
+  push:
+    branches:
+      - "release/beta"
+    # Only trigger on PR merges, not direct commits or auto-release commits
+    # This prevents loops and ensures releases only happen after proper PR review
+  workflow_dispatch:
+    inputs:
+      force_version:
+        description: 'Force specific version (optional)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: read
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  auto-release-beta:
+    name: "🚀 Auto-Release Beta"
+    runs-on: ubuntu-latest
+    environment: pypi
+    
+    # Only trigger auto-release for PR merges, not direct commits or auto-release loops
+    # This ensures releases only happen after proper PR review and prevents infinite loops
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      (github.event_name == 'push' && 
+       !contains(github.ref, 'refs/pull/') &&
+       !contains(github.event.head_commit.message, '[skip-release]') &&
+       !(contains(github.event.head_commit.message, '🚀 Auto-release: Bump to v') && 
+         github.event.head_commit.author.email == 'action@github.com') &&
+       (contains(github.event.head_commit.message, 'Merge pull request #') ||
+        contains(github.event.head_commit.message, '(#') ||
+        contains(github.event.head_commit.message, 'Merge branch')))
+    
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: "� Verify Not Auto-Release Loop"
+        run: |
+          echo "🔍 Checking commit details to prevent infinite loops..."
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+          echo "Author: ${{ github.event.head_commit.author.name }} (${{ github.event.head_commit.author.email }})"
+          echo "✅ Loop prevention checks passed. Proceeding with beta release."
+
+      - name: "�🐍 Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: "📦 Install dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: "⏱️ Check for Recent Beta Releases"
+        id: time_check
+        run: |
+          echo "🔍 Checking for recent beta releases to prevent rapid-fire releases..."
+          
+          # Get the latest beta tag
+          LATEST_BETA_TAG=$(git tag -l "v*b*" --sort=-version:refname | head -n 1)
+          
+          if [ -n "$LATEST_BETA_TAG" ]; then
+            echo "Latest beta tag: $LATEST_BETA_TAG"
+            
+            # Get the timestamp of the latest beta tag
+            TAG_TIME=$(git log -1 --format=%ct "$LATEST_BETA_TAG")
+            CURRENT_TIME=$(date +%s)
+            TIME_DIFF=$((CURRENT_TIME - TAG_TIME))
+            
+            echo "Tag created $TIME_DIFF seconds ago"
+            
+            # If the latest beta was created less than 5 minutes ago, fail with clear message
+            if [ $TIME_DIFF -lt 300 ]; then
+              echo "❌ Latest beta release was created less than 5 minutes ago."
+              echo "This prevents rapid-fire releases and potential loops."
+              echo "No new release was created - wait at least 5 minutes between releases."
+              echo "" 
+              echo "Recent release: $LATEST_BETA_TAG (created $TIME_DIFF seconds ago)"
+              echo "Minimum wait time: 300 seconds (5 minutes)"
+              echo "Time remaining: $((300 - TIME_DIFF)) seconds"
+              exit 1
+            fi
+          fi
+          
+          echo "✅ No recent beta releases detected. Proceeding with release."
+
+      # Skip quality checks - they should have already passed during PR review
+      # This workflow focuses solely on release creation after PR approval
+
+      - name: "📝 Auto-increment Beta Version"
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.force_version }}" ]; then
+            NEW_VERSION="${{ github.event.inputs.force_version }}"
+            echo "Using forced version: $NEW_VERSION"
+            python scripts/update_version.py "$NEW_VERSION"
+          else
+            echo "Auto-incrementing beta version..."
+            python scripts/update_version.py --increment beta
+          fi
+          
+          # Get the new version
+          NEW_VERSION=$(python scripts/update_version.py --show | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+[a-zA-Z0-9]*')
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "📌 New version: $NEW_VERSION"
+
+      - name: "💾 Commit Version Update"
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pyproject.toml
+          git commit -m "🚀 Auto-release: Bump to v${{ steps.version.outputs.new_version }}" || exit 0
+
+      - name: "🏷️ Create Git Tag"
+        run: |
+          git tag -a "v${{ steps.version.outputs.new_version }}" -m "Beta release v${{ steps.version.outputs.new_version }}"
+
+      - name: "⬆️ Push Changes and Tags"
+        run: |
+          git push origin release/beta
+          git push origin "v${{ steps.version.outputs.new_version }}"
+
+      - name: "📦 Build Package"
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      # Note: Publishing to PyPI is now handled by the publish-to-pypi.yml workflow
+      # when the GitHub release is created. This prevents duplicate uploads.
+
+      - name: "📋 Create GitHub Release"
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          tag_name: "v${{ steps.version.outputs.new_version }}"
+          release_name: "libdyson-rest v${{ steps.version.outputs.new_version }} (Beta)"
+          body: |
+            🧪 **Beta Release** - Feature complete, testing for stability
+            
+            **Version:** `${{ steps.version.outputs.new_version }}`
+            **Published to:** PyPI
+            **Branch:** `release/beta`
+            
+            ## Installation
+            ```bash
+            pip install libdyson-rest==${{ steps.version.outputs.new_version }}
+            ```
+            
+            ## 🔄 Beta Notice
+            This is a beta release. All features are implemented but may contain bugs.
+            Please report any issues you encounter.
+            
+            ## 🔄 Auto-Generated Release
+            This release was automatically created by the beta release pipeline.
+          draft: false
+          prerelease: true
+
+      - name: "📊 Release Summary"
+        run: |
+          echo "## 🎉 Beta Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** PyPI" >> $GITHUB_STEP_SUMMARY  
+          echo "**Branch:** \`release/beta\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "pip install libdyson-rest==${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [PyPI Package](https://pypi.org/project/libdyson-rest/${{ steps.version.outputs.new_version }}/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY

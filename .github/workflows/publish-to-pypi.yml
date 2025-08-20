@@ -1,0 +1,186 @@
+# Smart PyPI Publishing Workflow
+#
+# This workflow automatically detects version patterns and routes packages appropriately
+# for BOTH manual runs and GitHub releases:
+# 
+# PEP 440 Version Examples:
+#   ALPHA/DEV → TestPyPI (internal testing):
+#     - 1.2.3a1, 1.2.3a2, 1.2.3alpha1  
+#     - 1.2.3.dev1, 1.2.3.dev0
+#   
+#   BETA/RC → PyPI (public beta testing):
+#     - 1.2.3b1, 1.2.3b2, 1.2.3beta1
+#     - 1.2.3rc1, 1.2.3rc2
+#   
+#   STABLE → PyPI (production):
+#     - 1.2.3
+#     - 1.2.3.post1 (patches)
+#
+# Note: PyPI uses PEP 440, NOT semantic versioning (semver).
+# Semver formats like "1.2.3-alpha.1" or "1.2.3+build" are NOT supported.
+
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to publish to'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto          # Auto-detect based on version
+          - testpypi      # Force TestPyPI
+          - pypi          # Force PyPI
+
+jobs:
+  detect-environment:
+    name: Detect Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      target-env: ${{ steps.detect.outputs.target-env }}
+      version: ${{ steps.detect.outputs.version }}
+      is-prerelease: ${{ steps.detect.outputs.is-prerelease }}
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Detect version and environment
+      id: detect
+      run: |
+        # Extract version from pyproject.toml using grep (more reliable)
+        VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Detected version: $VERSION"
+
+        # Determine target environment
+        if [[ "${{ github.event.inputs.environment }}" == "pypi" ]]; then
+          # Force PyPI
+          TARGET_ENV="pypi"
+          IS_PRERELEASE="false"
+          echo "Forced PyPI target"
+        elif [[ "${{ github.event.inputs.environment }}" == "testpypi" ]]; then
+          # Force TestPyPI
+          TARGET_ENV="testpypi"
+          IS_PRERELEASE="true"
+          echo "Forced TestPyPI target"
+        else
+          # Auto-detect based on version (PEP 440 compliant) - works for both releases and manual runs
+          if [[ "$VERSION" =~ (a[0-9]+|alpha[0-9]+|\.dev[0-9]*) ]]; then
+            TARGET_ENV="testpypi"
+            IS_PRERELEASE="true"
+            echo "Alpha/dev version detected - targeting TestPyPI (pattern: a1, alpha1, .dev1)"
+          elif [[ "$VERSION" =~ (b[0-9]+|beta[0-9]+|rc[0-9]+) ]]; then
+            TARGET_ENV="pypi"
+            IS_PRERELEASE="true"
+            echo "Beta/RC version detected - targeting PyPI as pre-release (pattern: b1, beta1, rc1)"
+          else
+            TARGET_ENV="pypi"
+            IS_PRERELEASE="false"
+            echo "Stable version detected - targeting PyPI"
+          fi
+        fi
+
+        echo "target-env=$TARGET_ENV" >> $GITHUB_OUTPUT
+        echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+        echo "Final target: $TARGET_ENV"
+
+  publish:
+    name: Publish Package
+    needs: detect-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.detect-environment.outputs.target-env }}
+    permissions:
+      id-token: write  # Required for trusted publishing
+      contents: read   # Required for actions/checkout
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5  # Updated to v5
+      with:
+        python-version: '3.11'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Install package dependencies
+      run: |
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Display version info
+      run: |
+        echo "🏷️  Version: ${{ needs.detect-environment.outputs.version }}"
+        echo "🎯 Target: ${{ needs.detect-environment.outputs.target-env }}"
+        echo "🚀 Pre-release: ${{ needs.detect-environment.outputs.is-prerelease }}"
+
+    - name: Run quality checks
+      run: |
+        python -m black --check .
+        python -m flake8 .
+        python -m isort --check-only .
+
+    - name: Build package
+      run: python -m build
+
+    - name: Check package
+      run: python -m twine check dist/*
+
+    - name: Publish to TestPyPI
+      if: ${{ needs.detect-environment.outputs.target-env == 'testpypi' }}
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+
+    - name: Publish to PyPI  
+      if: ${{ needs.detect-environment.outputs.target-env == 'pypi' }}
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+    - name: Create summary
+      run: |
+        echo "## 🎉 Package Published Successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Version:** ${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Target:** ${{ needs.detect-environment.outputs.target-env }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Pre-release:** ${{ needs.detect-environment.outputs.is-prerelease }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ needs.detect-environment.outputs.target-env }}" == "testpypi" ]]; then
+          echo "🔗 **TestPyPI URL:** https://test.pypi.org/project/libdyson-rest/${{ needs.detect-environment.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Installation:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "pip install -i https://test.pypi.org/simple/ libdyson-rest==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📝 **Note:** Alpha/dev versions are published to TestPyPI for internal testing" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "🔗 **PyPI URL:** https://pypi.org/project/libdyson-rest/${{ needs.detect-environment.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.detect-environment.outputs.is-prerelease }}" == "true" ]]; then
+            echo "### Beta Installation:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "# Install specific beta version" >> $GITHUB_STEP_SUMMARY
+            echo "pip install libdyson-rest==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Or install latest pre-release" >> $GITHUB_STEP_SUMMARY
+            echo "pip install --pre libdyson-rest" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎯 **Beta users can now easily participate in testing!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Installation:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "pip install libdyson-rest==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi

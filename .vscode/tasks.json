@@ -1,0 +1,475 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Setup Dev Environment",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "venv", ".venv"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Create virtual environment and install development dependencies"
+        },
+        {
+            "label": "Install Dev Dependencies",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-c", "import subprocess, sys; subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements-dev.txt']); subprocess.run([sys.executable, '-m', 'pip', 'install', '-e', '.'])"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Install development dependencies and package in development mode",
+            "dependsOn": "Setup Dev Environment"
+        },
+        {
+            "label": "Format Code",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "black", "."],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Format code using Black"
+        },
+        {
+            "label": "Lint Code",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "flake8", "."],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "flake8",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": {
+                        "regexp": "^(.*):(\\d+):(\\d+):\\s+(\\w\\d+)\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "code": 4,
+                        "message": 5
+                    }
+                }
+            ],
+            "detail": "Lint code using Flake8"
+        },
+        {
+            "label": "Sort Imports",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "isort", "."],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Sort imports using isort"
+        },
+        {
+            "label": "Type Check",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "mypy", "src/libdyson_mqtt"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "mypy",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": {
+                        "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning|note):\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "message": 5
+                    }
+                }
+            ],
+            "detail": "Type check using mypy"
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "pytest"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "pytest",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": [
+                        {
+                            "regexp": "^(.*):(\\d+):\\s+(.*)$",
+                            "file": 1,
+                            "line": 2,
+                            "message": 3
+                        }
+                    ]
+                }
+            ],
+            "detail": "Run tests using pytest with coverage"
+        },
+        {
+            "label": "Run Unit Tests",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "pytest", "tests/unit/"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "pytest",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": [
+                        {
+                            "regexp": "^(.*):(\\d+):\\s+(.*)$",
+                            "file": 1,
+                            "line": 2,
+                            "message": 3
+                        }
+                    ]
+                }
+            ],
+            "detail": "Run unit tests only"
+        },
+        {
+            "label": "Run Integration Tests",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["-m", "pytest", "tests/integration/"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "pytest",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": [
+                        {
+                            "regexp": "^(.*):(\\d+):\\s+(.*)$",
+                            "file": 1,
+                            "line": 2,
+                            "message": 3
+                        }
+                    ]
+                }
+            ],
+            "detail": "Run integration tests only"
+        },
+        {
+            "label": "Check All",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Format Code",
+                "Sort Imports",
+                "Lint Code",
+                "Type Check",
+                "Run Tests"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Run all quality checks in sequence"
+        },
+        {
+            "label": "Sync Tool Versions",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Install Dev Dependencies"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Complete version synchronization workflow (installs dependencies)"
+        },
+        {
+            "label": "Verify Version Sync",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Format Code",
+                "Sort Imports",
+                "Lint Code",
+                "Type Check",
+                "Run Tests"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Verify all tools work after version synchronization"
+        },
+        {
+            "label": "Sync Tool Versions (Python)",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["scripts/sync_versions.py", "--verbose"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Complete automated version synchronization using Python script"
+        },
+        {
+            "label": "Sync Tool Versions (Dry Run)",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": ["scripts/sync_versions.py", "--dry-run", "--verbose"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Preview version synchronization changes without making modifications"
+        },
+        {
+            "label": "Security Scan (Bandit)",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "run",
+                "--rm",
+                "-v",
+                "${workspaceFolder}:/workspace",
+                "-w",
+                "/workspace",
+                "python:3.11-slim",
+                "sh",
+                "-c",
+                "pip install --quiet bandit[toml]==1.8.0 && python -m bandit -c pyproject.toml -r src/"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "bandit",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": {
+                        "regexp": "^>> Issue: \\[(.*)\\] (.*)\\s*Location: (.*):(\\d+):(\\d+)$",
+                        "file": 3,
+                        "line": 4,
+                        "column": 5,
+                        "severity": 1,
+                        "message": 2
+                    }
+                }
+            ],
+            "detail": "Run Bandit security scanner using Docker container (cross-platform)"
+        },
+        {
+            "label": "Security Scan (Safety)",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "run",
+                "--rm",
+                "-v",
+                "${workspaceFolder}:/workspace",
+                "-w",
+                "/workspace",
+                "python:3.11-slim",
+                "sh",
+                "-c",
+                "pip install --quiet safety && python -m safety check --json"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Check for known security vulnerabilities in dependencies using Docker"
+        },
+        {
+            "label": "Version: Show Current",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": [".github/scripts/update_version.py", "--show"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Show current version from pyproject.toml"
+        },
+        {
+            "label": "Version: Set Alpha",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": [".github/scripts/update_version.py", "--increment", "alpha"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Increment to next alpha version (routes to TestPyPI)"
+        },
+        {
+            "label": "Version: Set Beta",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": [".github/scripts/update_version.py", "--increment", "beta"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Increment to next beta version (routes to PyPI)"
+        },
+        {
+            "label": "Version: Set Release Candidate",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": [".github/scripts/update_version.py", "--increment", "rc"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Increment to next release candidate (routes to PyPI)"
+        },
+        {
+            "label": "Version: Set Custom",
+            "type": "shell",
+            "command": ".venv/Scripts/python.exe",
+            "args": [".github/scripts/update_version.py", "${input:customVersion}"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Set custom version (will prompt for input)"
+        },
+        {
+            "label": "Security Scan (All)",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Security Scan (Bandit)",
+                "Security Scan (Safety)"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Run all security scans using Docker containers"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "customVersion",
+            "description": "Enter version (e.g., 0.3.0a1, 0.3.0b1, 0.3.0rc1, 0.3.0)",
+            "default": "0.3.0a1",
+            "type": "promptString"
+        }
+    ]
+}

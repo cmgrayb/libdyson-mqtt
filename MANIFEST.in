@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+include requirements-dev.txt
+recursive-include src *.py
+recursive-include src *.typed
+recursive-exclude tests *
+recursive-exclude examples *
+recursive-exclude .github *

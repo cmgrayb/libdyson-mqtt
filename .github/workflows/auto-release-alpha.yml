@@ -1,0 +1,196 @@
+name: "Auto-Release: Alpha"
+
+on:
+  push:
+    branches:
+      - "release/alpha"
+    # Only trigger on PR merges, not direct commits or auto-release commits
+    # This prevents loops and ensures releases only happen after proper PR review
+  workflow_dispatch:
+    inputs:
+      force_version:
+        description: 'Force specific version (optional)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: read
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  auto-release-alpha:
+    name: "🚀 Auto-Release Alpha"
+    runs-on: ubuntu-latest
+    environment: testpypi
+    
+    # Only trigger auto-release for PR merges, not direct commits or auto-release loops
+    # This ensures releases only happen after proper PR review and prevents infinite loops
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      (github.event_name == 'push' && 
+       !contains(github.ref, 'refs/pull/') &&
+       !contains(github.event.head_commit.message, '[skip-release]') &&
+       !(contains(github.event.head_commit.message, '🚀 Auto-release: Bump to v') && 
+         github.event.head_commit.author.email == 'action@github.com') &&
+       (contains(github.event.head_commit.message, 'Merge pull request #') ||
+        contains(github.event.head_commit.message, '(#') ||
+        contains(github.event.head_commit.message, 'Merge branch')))
+    
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: "🔍 Verify Not Auto-Release Loop"
+        run: |
+          echo "🔍 Checking commit details to prevent infinite loops..."
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+          echo "Author: ${{ github.event.head_commit.author.name }} (${{ github.event.head_commit.author.email }})"
+          echo "Committer: ${{ github.event.head_commit.committer.name }} (${{ github.event.head_commit.committer.email }})"
+          
+          # Simple check: Only fail if this is a direct auto-release commit from GitHub Action
+          if [[ "${{ github.event.head_commit.message }}" == *"🚀 Auto-release: Bump to v"* ]] && [[ "${{ github.event.head_commit.author.email }}" == "action@github.com" ]]; then
+            echo "❌ This is a direct auto-release commit from GitHub Action - preventing loop."
+            exit 1
+          fi
+          
+          echo "✅ Loop prevention checks passed. Proceeding with alpha release."
+
+      - name: "�🐍 Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: "📦 Install dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: "⏱️ Check for Recent Alpha Releases"
+        id: time_check
+        run: |
+          echo "🔍 Checking for recent alpha releases to prevent rapid-fire releases..."
+          
+          # Get the latest alpha tag
+          LATEST_ALPHA_TAG=$(git tag -l "v*a*" --sort=-version:refname | head -n 1)
+          
+          if [ -n "$LATEST_ALPHA_TAG" ]; then
+            echo "Latest alpha tag: $LATEST_ALPHA_TAG"
+            
+            # Get the timestamp of the latest alpha tag
+            TAG_TIME=$(git log -1 --format=%ct "$LATEST_ALPHA_TAG")
+            CURRENT_TIME=$(date +%s)
+            TIME_DIFF=$((CURRENT_TIME - TAG_TIME))
+            
+            echo "Tag created $TIME_DIFF seconds ago"
+            
+            # If the latest alpha was created less than 5 minutes ago, fail with clear message
+            if [ $TIME_DIFF -lt 300 ]; then
+              echo "❌ Latest alpha release was created less than 5 minutes ago."
+              echo "This prevents rapid-fire releases and potential loops."
+              echo "No new release was created - wait at least 5 minutes between releases."
+              echo "" 
+              echo "Recent release: $LATEST_ALPHA_TAG (created $TIME_DIFF seconds ago)"
+              echo "Minimum wait time: 300 seconds (5 minutes)"
+              echo "Time remaining: $((300 - TIME_DIFF)) seconds"
+              exit 1
+            fi
+          fi
+          
+          echo "should_skip=false" >> $GITHUB_OUTPUT
+          echo "✅ No recent alpha releases detected. Proceeding with release."
+
+      # Skip quality checks - they should have already passed during PR review
+      # This workflow focuses solely on release creation after PR approval
+
+      - name: "📝 Auto-increment Alpha Version"
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.force_version }}" ]; then
+            NEW_VERSION="${{ github.event.inputs.force_version }}"
+            echo "Using forced version: $NEW_VERSION"
+            python scripts/update_version.py "$NEW_VERSION"
+          else
+            echo "Auto-incrementing alpha version..."
+            python scripts/update_version.py --increment alpha
+          fi
+          
+          # Get the new version
+          NEW_VERSION=$(python scripts/update_version.py --show | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+[a-zA-Z0-9]*')
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "📌 New version: $NEW_VERSION"
+
+      - name: "💾 Commit Version Update"
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pyproject.toml
+          git commit -m "🚀 Auto-release: Bump to v${{ steps.version.outputs.new_version }}" || exit 0
+
+      - name: "🏷️ Create Git Tag"
+        run: |
+          git tag -a "v${{ steps.version.outputs.new_version }}" -m "Alpha release v${{ steps.version.outputs.new_version }}"
+
+      - name: "⬆️ Push Changes and Tags"
+        run: |
+          git push origin release/alpha
+          git push origin "v${{ steps.version.outputs.new_version }}"
+
+      - name: "📦 Build Package"
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      # Note: Publishing to TestPyPI is now handled by the publish-to-pypi.yml workflow
+      # when the GitHub release is created. This prevents duplicate uploads.
+
+      - name: "📋 Create GitHub Release"
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          tag_name: "v${{ steps.version.outputs.new_version }}"
+          release_name: "libdyson-rest v${{ steps.version.outputs.new_version }} (Alpha)"
+          body: |
+            🧪 **Alpha Release** - For testing purposes only
+            
+            **Version:** `${{ steps.version.outputs.new_version }}`
+            **Published to:** TestPyPI
+            **Branch:** `release/alpha`
+            
+            ## Installation
+            ```bash
+            pip install --index-url https://test.pypi.org/simple/ libdyson-rest==${{ steps.version.outputs.new_version }}
+            ```
+            
+            ## ⚠️ Alpha Notice
+            This is an alpha release intended for testing. Features may be incomplete or unstable.
+            
+            ## 🔄 Auto-Generated Release
+            This release was automatically created by the alpha release pipeline.
+          draft: false
+          prerelease: true
+
+      - name: "📊 Release Summary"
+        run: |
+          echo "## 🎉 Alpha Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.new_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** TestPyPI" >> $GITHUB_STEP_SUMMARY  
+          echo "**Branch:** \`release/alpha\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "pip install --index-url https://test.pypi.org/simple/ libdyson-rest==${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [TestPyPI Package](https://test.pypi.org/project/libdyson-rest/${{ steps.version.outputs.new_version }}/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY
