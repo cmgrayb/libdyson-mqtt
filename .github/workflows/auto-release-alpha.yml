@@ -116,14 +116,14 @@ jobs:
           if [ -n "${{ github.event.inputs.force_version }}" ]; then
             NEW_VERSION="${{ github.event.inputs.force_version }}"
             echo "Using forced version: $NEW_VERSION"
-            python scripts/update_version.py "$NEW_VERSION"
+            python .github/scripts/update_version.py "$NEW_VERSION"
           else
             echo "Auto-incrementing alpha version..."
-            python scripts/update_version.py --increment alpha
+            python .github/scripts/update_version.py --increment alpha
           fi
           
           # Get the new version
-          NEW_VERSION=$(python scripts/update_version.py --show | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+[a-zA-Z0-9]*')
+          NEW_VERSION=$(python .github/scripts/update_version.py --show | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+[a-zA-Z0-9]*')
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "📌 New version: $NEW_VERSION"
 
