@@ -120,17 +120,47 @@ jobs:
 
         # Test basic import
         try:
-            import libdyson_rest
+            import libdyson_mqtt
             print("[OK] Package import successful")
         except ImportError as e:
             print(f"[ERROR] Package import failed: {e}")
             sys.exit(1)
 
+        # Test main classes import
         try:
-            from libdyson_rest import DysonClient
-            print("[OK] DysonClient import successful")
+            from libdyson_mqtt import DysonMqttClient, ConnectionConfig, MqttMessage
+            print("[OK] DysonMqttClient, ConnectionConfig, and MqttMessage import successful")
         except ImportError as e:
-            print(f"[ERROR] DysonClient import failed: {e}")
+            print(f"[ERROR] Main classes import failed: {e}")
+            sys.exit(1)
+
+        # Test exception classes import
+        try:
+            from libdyson_mqtt import (
+                DysonMqttError,
+                ConnectionError,
+                AuthenticationError,
+                TopicError,
+                ClientNotConnectedError,
+                CleanupError
+            )
+            print("[OK] Exception classes import successful")
+        except ImportError as e:
+            print(f"[ERROR] Exception classes import failed: {e}")
+            sys.exit(1)
+
+        # Test basic instantiation
+        try:
+            config = ConnectionConfig(
+                host="test.example.com",
+                mqtt_username="test_user",
+                mqtt_password="test_pass",
+                mqtt_topics=["test/topic"]
+            )
+            client = DysonMqttClient(config)
+            print("[OK] DysonMqttClient instantiation successful")
+        except Exception as e:
+            print(f"[ERROR] DysonMqttClient instantiation failed: {e}")
             sys.exit(1)
 
     - name: Upload build artifacts
