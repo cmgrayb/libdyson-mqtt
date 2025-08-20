@@ -155,32 +155,32 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [[ "${{ needs.detect-environment.outputs.target-env }}" == "testpypi" ]]; then
-          echo "🔗 **TestPyPI URL:** https://test.pypi.org/project/libdyson-rest/${{ needs.detect-environment.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 **TestPyPI URL:** https://test.pypi.org/project/libdyson-mqtt/${{ needs.detect-environment.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Test Installation:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "pip install -i https://test.pypi.org/simple/ libdyson-rest==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "pip install -i https://test.pypi.org/simple/ libdyson-mqtt==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📝 **Note:** Alpha/dev versions are published to TestPyPI for internal testing" >> $GITHUB_STEP_SUMMARY
         else
-          echo "🔗 **PyPI URL:** https://pypi.org/project/libdyson-rest/${{ needs.detect-environment.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 **PyPI URL:** https://pypi.org/project/libdyson-mqtt/${{ needs.detect-environment.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ needs.detect-environment.outputs.is-prerelease }}" == "true" ]]; then
             echo "### Beta Installation:" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
             echo "# Install specific beta version" >> $GITHUB_STEP_SUMMARY
-            echo "pip install libdyson-rest==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "pip install libdyson-mqtt==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "# Or install latest pre-release" >> $GITHUB_STEP_SUMMARY
-            echo "pip install --pre libdyson-rest" >> $GITHUB_STEP_SUMMARY
+            echo "pip install --pre libdyson-mqtt" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "🎯 **Beta users can now easily participate in testing!**" >> $GITHUB_STEP_SUMMARY
           else
             echo "### Installation:" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-            echo "pip install libdyson-rest==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "pip install libdyson-mqtt==${{ needs.detect-environment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
         fi
