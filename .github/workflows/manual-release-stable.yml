@@ -110,7 +110,7 @@ jobs:
           echo "📌 Stable version: $STABLE_VERSION"
           
           # Update version in pyproject.toml
-          python scripts/update_version.py "$STABLE_VERSION"
+          python .github/scripts/update_version.py "$STABLE_VERSION"
           
           # Commit the version change
           git config --local user.email "action@github.com"
