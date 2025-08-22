@@ -4,11 +4,12 @@
 import json
 import time
 from datetime import datetime
+from typing import Any, Union
 
 from libdyson_mqtt import ConnectionConfig, DysonMqttClient
 
 
-def message_handler(message):
+def message_handler(message: Any) -> None:
     """Handle incoming MQTT messages."""
     print(f"[{datetime.now().isoformat()}] Received message:")
     print(f"  Topic: {message.topic}")
@@ -18,7 +19,7 @@ def message_handler(message):
     print("---")
 
 
-def connection_handler(connected, error):
+def connection_handler(connected: bool, error: Union[str, None]) -> None:
     """Handle connection status changes."""
     if connected:
         print("✓ Connected to Dyson device")
@@ -26,7 +27,7 @@ def connection_handler(connected, error):
         print(f"✗ Connection lost: {error}")
 
 
-def main():
+def main() -> int:
     """Main example function."""
     # Example configuration - replace with your device details
     config = ConnectionConfig(
@@ -103,7 +104,7 @@ def main():
     return 0
 
 
-def example_context_manager():
+def example_context_manager() -> None:
     """Example using context manager for automatic cleanup."""
     config = ConnectionConfig(
         host="192.168.1.100",

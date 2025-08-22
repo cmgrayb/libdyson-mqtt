@@ -7,6 +7,7 @@ import json
 from typing import Optional
 from unittest.mock import Mock, patch
 
+import paho.mqtt.client as mqtt  # type: ignore[import-untyped]
 import pytest
 
 from libdyson_mqtt import ConnectionConfig, DysonMqttClient, MqttMessage
@@ -51,10 +52,8 @@ class TestDysonMqttClientIntegration:
             # Mock subscribe and publish methods to return expected tuples
             mock_client_instance.subscribe.return_value = (0, 1)  # (result, mid)
             mock_client_instance.publish.return_value = (0, 1)  # (result, mid)
-
             # Mock publish and subscribe methods to return expected tuples
-            import paho.mqtt.client as mqtt
-
+            mock_client_instance.publish.return_value = (mqtt.MQTT_ERR_SUCCESS, 1)
             mock_client_instance.publish.return_value = (mqtt.MQTT_ERR_SUCCESS, 1)
             mock_client_instance.subscribe.return_value = (mqtt.MQTT_ERR_SUCCESS, 1)
 
