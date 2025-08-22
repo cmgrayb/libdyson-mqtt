@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-import paho.mqtt.client as mqtt
+import paho.mqtt.client as mqtt  # type: ignore
 import pytest
 
 from libdyson_mqtt import ConnectionConfig, DysonMqttClient

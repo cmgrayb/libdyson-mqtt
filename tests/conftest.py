@@ -6,7 +6,7 @@ from libdyson_mqtt import ConnectionConfig
 
 
 @pytest.fixture
-def sample_config():
+def sample_config() -> ConnectionConfig:
     """Provide a sample connection configuration for testing."""
     return ConnectionConfig(
         host="192.168.1.100",

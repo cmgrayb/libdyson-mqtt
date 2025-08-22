@@ -56,8 +56,19 @@ class TestDysonMqttClient:
         client.set_connection_callback(conn_callback)
         assert client._connection_callback == conn_callback
 
-        # Test clearing callbacks
+        # Test clearing message callback
         client.set_message_callback(None)
-        client.set_connection_callback(None)
         assert client._message_callback is None
+
+    def test_clear_connection_callback(self, sample_config: ConnectionConfig) -> None:
+        """Test clearing connection callback."""
+        client = DysonMqttClient(sample_config)
+
+        # Set a callback first
+        callback = Mock()
+        client.set_connection_callback(callback)
+        assert client._connection_callback == callback
+
+        # Clear the callback
+        client.set_connection_callback(None)
         assert client._connection_callback is None
