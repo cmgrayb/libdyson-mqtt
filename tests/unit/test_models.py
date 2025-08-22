@@ -10,7 +10,7 @@ from libdyson_mqtt.models import ConnectionConfig, ConnectionStatus, MqttMessage
 class TestConnectionConfig:
     """Tests for ConnectionConfig model."""
 
-    def test_valid_config_creation(self):
+    def test_valid_config_creation(self) -> None:
         """Test creating a valid connection configuration."""
         config = ConnectionConfig(
             host="192.168.1.100",
@@ -28,27 +28,27 @@ class TestConnectionConfig:
         assert config.port == 1883
         assert config.keepalive == 60
 
-    def test_invalid_empty_host(self):
+    def test_invalid_empty_host(self) -> None:
         """Test that empty host raises ValueError."""
         with pytest.raises(ValueError, match="Host cannot be empty"):
             ConnectionConfig(host="", mqtt_username="test_user", mqtt_password="test_pass", mqtt_topics=["topic1"])
 
-    def test_invalid_empty_username(self):
+    def test_invalid_empty_username(self) -> None:
         """Test that empty username raises ValueError."""
         with pytest.raises(ValueError, match="MQTT username cannot be empty"):
             ConnectionConfig(host="192.168.1.100", mqtt_username="", mqtt_password="test_pass", mqtt_topics=["topic1"])
 
-    def test_invalid_empty_password(self):
+    def test_invalid_empty_password(self) -> None:
         """Test that empty password raises ValueError."""
         with pytest.raises(ValueError, match="MQTT password cannot be empty"):
             ConnectionConfig(host="192.168.1.100", mqtt_username="test_user", mqtt_password="", mqtt_topics=["topic1"])
 
-    def test_invalid_empty_topics(self):
+    def test_invalid_empty_topics(self) -> None:
         """Test that empty topics list raises ValueError."""
         with pytest.raises(ValueError, match="MQTT topics list cannot be empty"):
             ConnectionConfig(host="192.168.1.100", mqtt_username="test_user", mqtt_password="test_pass", mqtt_topics=[])
 
-    def test_invalid_port_range(self):
+    def test_invalid_port_range(self) -> None:
         """Test that invalid port ranges raise ValueError."""
         with pytest.raises(ValueError, match="Port must be between 1 and 65535"):
             ConnectionConfig(
@@ -68,7 +68,7 @@ class TestConnectionConfig:
                 port=65536,
             )
 
-    def test_invalid_keepalive(self):
+    def test_invalid_keepalive(self) -> None:
         """Test that invalid keepalive raises ValueError."""
         with pytest.raises(ValueError, match="Keepalive must be positive"):
             ConnectionConfig(
@@ -83,7 +83,7 @@ class TestConnectionConfig:
 class TestMqttMessage:
     """Tests for MqttMessage model."""
 
-    def test_message_creation_with_timestamp(self):
+    def test_message_creation_with_timestamp(self) -> None:
         """Test creating a message with explicit timestamp."""
         timestamp = datetime.now()
         msg = MqttMessage(topic="test/topic", payload=b"test payload", qos=2, retain=False, timestamp=timestamp)
@@ -94,7 +94,7 @@ class TestMqttMessage:
         assert msg.retain is False
         assert msg.timestamp == timestamp
 
-    def test_message_creation_without_timestamp(self):
+    def test_message_creation_without_timestamp(self) -> None:
         """Test creating a message without explicit timestamp."""
         msg = MqttMessage(topic="test/topic", payload=b"test payload", qos=2, retain=False)
 
@@ -105,13 +105,13 @@ class TestMqttMessage:
         assert msg.timestamp is not None
         assert isinstance(msg.timestamp, datetime)
 
-    def test_payload_str_property(self):
+    def test_payload_str_property(self) -> None:
         """Test the payload_str property."""
         msg = MqttMessage(topic="test/topic", payload=b"test payload", qos=2, retain=False)
 
         assert msg.payload_str == "test payload"
 
-    def test_payload_str_with_invalid_utf8(self):
+    def test_payload_str_with_invalid_utf8(self) -> None:
         """Test payload_str with invalid UTF-8 bytes."""
         msg = MqttMessage(topic="test/topic", payload=b"\xff\xfe", qos=2, retain=False)  # Invalid UTF-8
 
@@ -119,7 +119,7 @@ class TestMqttMessage:
         payload_str = msg.payload_str
         assert isinstance(payload_str, str)
 
-    def test_to_dict(self):
+    def test_to_dict(self) -> None:
         """Test converting message to dictionary."""
         timestamp = datetime.now()
         msg = MqttMessage(topic="test/topic", payload=b"test payload", qos=2, retain=True, timestamp=timestamp)
@@ -135,7 +135,7 @@ class TestMqttMessage:
 
         assert result == expected
 
-    def test_to_dict_without_timestamp(self):
+    def test_to_dict_without_timestamp(self) -> None:
         """Test converting message without timestamp to dictionary."""
         msg = MqttMessage(topic="test/topic", payload=b"test payload", qos=2, retain=True)
 
@@ -150,7 +150,7 @@ class TestMqttMessage:
 class TestConnectionStatus:
     """Tests for ConnectionStatus model."""
 
-    def test_status_creation(self):
+    def test_status_creation(self) -> None:
         """Test creating connection status."""
         status = ConnectionStatus(connected=True)
 
@@ -160,7 +160,7 @@ class TestConnectionStatus:
         assert status.connection_attempts == 0
         assert status.last_error is None
 
-    def test_status_to_dict(self):
+    def test_status_to_dict(self) -> None:
         """Test converting status to dictionary."""
         connect_time = datetime.now()
         status = ConnectionStatus(
