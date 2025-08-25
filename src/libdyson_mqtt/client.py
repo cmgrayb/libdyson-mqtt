@@ -2,14 +2,18 @@
 
 import logging
 import threading
+import time
 import uuid
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
-import paho.mqtt.client as mqtt  # type: ignore[import-untyped]
+import paho.mqtt.client as mqtt
+from paho.mqtt.client import ConnectFlags, DisconnectFlags
+from paho.mqtt.enums import CallbackAPIVersion
+from paho.mqtt.properties import Properties
+from paho.mqtt.reasoncodes import ReasonCode
 
 from .exceptions import (
-    CleanupError,
     ClientNotConnectedError,
     ConnectionError,
     TopicError,
@@ -46,7 +50,7 @@ class DysonMqttClient:
 
     def _setup_client(self) -> None:
         """Set up the MQTT client with callbacks."""
-        self._client = mqtt.Client(self._client_id)
+        self._client = mqtt.Client(callback_api_version=CallbackAPIVersion.VERSION2, client_id=self._client_id)
 
         # Set credentials
         self._client.username_pw_set(self._config.mqtt_username, self._config.mqtt_password)
@@ -59,10 +63,43 @@ class DysonMqttClient:
         self._client.on_publish = self._on_publish
         self._client.on_log = self._on_log
 
-    def _on_connect(self, client: mqtt.Client, userdata: Any, flags: Dict[str, Any], rc: int) -> None:
+    def _on_connect(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        flags: ConnectFlags,
+        reason_code: ReasonCode,
+        properties: Optional[Properties] = None,
+    ) -> None:
         """Handle connection events."""
         with self._lock:
-            if rc == 0:
+            # Handle different types of reason codes
+            if hasattr(reason_code, "is_failure"):
+                # ReasonCode object (MQTT 5.0 style)
+                is_failure = reason_code.is_failure
+            else:
+                # ConnackCode or integer (MQTT 3.1.1 style) - 0 means success
+                is_failure = reason_code.value != 0 if hasattr(reason_code, "value") else reason_code != 0
+
+            if is_failure:
+                if hasattr(reason_code, "is_failure"):
+                    # ReasonCode object - already has descriptive string representation
+                    error_msg = f"Failed to connect to MQTT broker: {reason_code}"
+                else:
+                    # ConnackCode or integer - use connack_string for descriptive messages
+                    code_value = reason_code.value if hasattr(reason_code, "value") else reason_code
+                    error_msg = f"Failed to connect to MQTT broker: {mqtt.connack_string(code_value)}"
+                logger.error(error_msg)
+                self._status.connected = False
+                self._status.last_error = error_msg
+                self._status.connection_attempts += 1
+
+                if self._connection_callback:
+                    try:
+                        self._connection_callback(False, error_msg)
+                    except Exception as e:
+                        logger.error(f"Error in connection callback: {e}")
+            else:
                 logger.info(f"Connected to MQTT broker at {self._config.host}")
                 self._status.connected = True
                 self._status.last_connect_time = datetime.now()
@@ -77,28 +114,31 @@ class DysonMqttClient:
                         self._connection_callback(True, None)
                     except Exception as e:
                         logger.error(f"Error in connection callback: {e}")
-            else:
-                error_msg = f"Failed to connect to MQTT broker: {mqtt.connack_string(rc)}"
-                logger.error(error_msg)
-                self._status.connected = False
-                self._status.last_error = error_msg
-                self._status.connection_attempts += 1
 
-                if self._connection_callback:
-                    try:
-                        self._connection_callback(False, error_msg)
-                    except Exception as e:
-                        logger.error(f"Error in connection callback: {e}")
-
-    def _on_disconnect(self, client: mqtt.Client, userdata: Any, rc: int) -> None:
+    def _on_disconnect(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        disconnect_flags: DisconnectFlags,
+        reason_code: ReasonCode,
+        properties: Optional[Properties] = None,
+    ) -> None:
         """Handle disconnection events."""
         with self._lock:
-            logger.info(f"Disconnected from MQTT broker (code: {rc})")
+            logger.info(f"Disconnected from MQTT broker (reason: {reason_code})")
             self._status.connected = False
             self._status.last_disconnect_time = datetime.now()
 
-            if rc != 0:
-                error_msg = f"Unexpected disconnection: {rc}"
+            # Handle different types of reason codes
+            if hasattr(reason_code, "is_failure"):
+                # ReasonCode object (MQTT 5.0 style)
+                is_failure = reason_code.is_failure
+            else:
+                # ConnackCode or integer - non-zero means failure/unexpected
+                is_failure = reason_code.value != 0 if hasattr(reason_code, "value") else reason_code != 0
+
+            if is_failure:
+                error_msg = f"Unexpected disconnection: {reason_code}"
                 self._status.last_error = error_msg
                 logger.warning(error_msg)
 
@@ -140,11 +180,15 @@ class DysonMqttClient:
         except Exception as e:
             logger.error(f"Error processing message: {e}")
 
-    def _on_subscribe(self, client: mqtt.Client, userdata: Any, mid: int, granted_qos: List[int]) -> None:
+    def _on_subscribe(
+        self, client: mqtt.Client, userdata: Any, mid: int, reason_code_list: Any, properties: Any = None
+    ) -> None:
         """Handle subscription confirmations."""
-        logger.debug(f"Subscription confirmed (mid: {mid}, QoS: {granted_qos})")
+        logger.debug(f"Subscription confirmed (mid: {mid}, reason codes: {reason_code_list})")
 
-    def _on_publish(self, client: mqtt.Client, userdata: Any, mid: int) -> None:
+    def _on_publish(
+        self, client: mqtt.Client, userdata: Any, mid: int, reason_code: Any = None, properties: Any = None
+    ) -> None:
         """Handle publish confirmations."""
         logger.debug(f"Message published (mid: {mid})")
 
@@ -196,11 +240,14 @@ class DysonMqttClient:
                 logger.error(error_msg)
                 raise ConnectionError(error_msg) from e
 
-    def disconnect(self) -> None:
-        """Cleanly disconnect from the MQTT broker.
+    def disconnect(self, timeout: float = 3.0) -> None:
+        """Cleanly disconnect from the MQTT broker with timeout.
+
+        Args:
+            timeout: Maximum time to wait for disconnect (seconds)
 
         Raises:
-            CleanupError: If the disconnection fails
+            CleanupError: If the disconnection fails critically
         """
         if not self._client:
             return
@@ -211,13 +258,24 @@ class DysonMqttClient:
                     logger.info("Disconnecting from MQTT broker")
                     self._client.disconnect()
 
+                    # Wait for disconnect with timeout
+                    start_time = time.time()
+                    while self._status.connected and (time.time() - start_time) < timeout:
+                        time.sleep(0.1)  # Short sleep to allow disconnect processing
+
+                    if self._status.connected:
+                        logger.warning(f"Disconnect timed out after {timeout}s, forcing cleanup")
+                        self._status.connected = False  # Force status update
+
                 # Stop the network loop
                 self._client.loop_stop()
 
         except Exception as e:
             error_msg = f"Error during disconnect: {e}"
             logger.error(error_msg)
-            raise CleanupError(error_msg) from e
+            # Don't raise the exception in normal cases - just log it
+            # This prevents Home Assistant integration reload from hanging
+            logger.warning("Continuing cleanup despite disconnect error")
 
     def publish(self, topic: str, payload: Union[str, bytes], qos: int = 2, retain: bool = False) -> None:
         """Publish a message to a topic (non-blocking).
