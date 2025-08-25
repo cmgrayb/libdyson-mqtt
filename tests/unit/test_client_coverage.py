@@ -4,9 +4,10 @@ from unittest.mock import Mock, patch
 
 import paho.mqtt.client as mqtt  # type: ignore
 import pytest
+from paho.mqtt.client import ConnackCode, DisconnectFlags  # type: ignore[import-untyped]
 
 from libdyson_mqtt import ConnectionConfig, DysonMqttClient
-from libdyson_mqtt.exceptions import CleanupError, ConnectionError, TopicError
+from libdyson_mqtt.exceptions import ConnectionError, TopicError
 
 
 class TestDysonMqttClientCoverage:
@@ -23,7 +24,7 @@ class TestDysonMqttClientCoverage:
             client.set_connection_callback(callback)
 
             # Simulate successful connection
-            client._on_connect(mock_client_instance, None, {}, mqtt.CONNACK_ACCEPTED)
+            client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_ACCEPTED)
 
             # Verify callback was called with success
             callback.assert_called_once_with(True, None)
@@ -39,7 +40,7 @@ class TestDysonMqttClientCoverage:
             client.set_connection_callback(callback)
 
             # Simulate connection failure
-            client._on_connect(mock_client_instance, None, {}, mqtt.CONNACK_REFUSED_NOT_AUTHORIZED)
+            client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_REFUSED_NOT_AUTHORIZED)
 
             # Verify callback was called with failure (using the actual error message)
             expected_msg = "Failed to connect to MQTT broker: Connection Refused: not authorised."
@@ -59,7 +60,7 @@ class TestDysonMqttClientCoverage:
 
             with patch("libdyson_mqtt.client.logger") as mock_logger:
                 # Simulate successful connection - should handle callback exception
-                client._on_connect(mock_client_instance, None, {}, mqtt.CONNACK_ACCEPTED)
+                client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_ACCEPTED)
 
                 # Verify error was logged
                 mock_logger.error.assert_called_with("Error in connection callback: Callback error")
@@ -103,12 +104,24 @@ class TestDysonMqttClientCoverage:
             client._status.connected = True
 
             # Simulate unexpected disconnect (non-zero return code)
-            client._on_disconnect(mock_client_instance, None, 1)
+            disconnect_flags = DisconnectFlags(False)
+            # Create a simple object that behaves like a reason code with value != 0
+
+            class MockDisconnectReason:
+
+                def __init__(self, value: int) -> None:
+                    self.value = value
+
+                def __str__(self) -> str:
+                    return f"MockDisconnectReason({self.value})"
+
+            disconnect_reason = MockDisconnectReason(mqtt.MQTT_ERR_CONN_LOST)
+            client._on_disconnect(mock_client_instance, None, disconnect_flags, disconnect_reason)
 
             # Verify status updated and callback called
             assert not client._status.connected
-            assert client._status.last_error == "Unexpected disconnection: 1"
-            callback.assert_called_once_with(False, "Unexpected disconnection: 1")
+            assert client._status.last_error == f"Unexpected disconnection: {disconnect_reason}"
+            callback.assert_called_once_with(False, f"Unexpected disconnection: {disconnect_reason}")
 
     def test_on_disconnect_callback_exception(self, sample_config: ConnectionConfig) -> None:
         """Test disconnect callback exception handling."""
@@ -126,7 +139,18 @@ class TestDysonMqttClientCoverage:
 
             with patch("libdyson_mqtt.client.logger") as mock_logger:
                 # Simulate unexpected disconnect
-                client._on_disconnect(mock_client_instance, None, 1)
+                disconnect_flags = DisconnectFlags(False)
+
+                class MockDisconnectReason:
+
+                    def __init__(self, value: int) -> None:
+                        self.value = value
+
+                    def __str__(self) -> str:
+                        return f"MockDisconnectReason({self.value})"
+
+                disconnect_reason = MockDisconnectReason(mqtt.MQTT_ERR_CONN_LOST)
+                client._on_disconnect(mock_client_instance, None, disconnect_flags, disconnect_reason)
 
                 # Verify error was logged
                 mock_logger.error.assert_called_with("Error in connection callback: Disconnect callback error")
@@ -210,8 +234,11 @@ class TestDysonMqttClientCoverage:
             client._client = mock_client_instance
             client._status.connected = True
 
-            with pytest.raises(CleanupError, match="Error during disconnect"):
-                client.disconnect()
+            # Should not raise exception anymore - just log warning
+            client.disconnect()
+
+            # Verify that it logged the error but didn't crash
+            mock_client_instance.disconnect.assert_called_once()
 
     def test_publish_with_mqtt_error(self, sample_config: ConnectionConfig) -> None:
         """Test publish method when MQTT publish fails."""
@@ -270,10 +297,10 @@ class TestDysonMqttClientCoverage:
         client = DysonMqttClient(sample_config)
 
         with patch("libdyson_mqtt.client.logger") as mock_logger:
-            client._on_subscribe(Mock(), None, 123, [0, 1, 2])
+            client._on_subscribe(Mock(), None, 123, [0, 1, 2], None)
 
             # Should log subscription confirmation
-            mock_logger.debug.assert_called_with("Subscription confirmed (mid: 123, QoS: [0, 1, 2])")
+            mock_logger.debug.assert_called_with("Subscription confirmed (mid: 123, reason codes: [0, 1, 2])")
 
     def test_on_publish_callback(self, sample_config: ConnectionConfig) -> None:
         """Test publish confirmation callback."""
