@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 import paho.mqtt.client as mqtt  # type: ignore[import-untyped]
 import pytest
+from paho.mqtt.client import ConnackCode  # type: ignore[import-untyped]
 
 from libdyson_mqtt import ConnectionConfig, DysonMqttClient, MqttMessage
 
@@ -66,7 +67,7 @@ class TestDysonMqttClientIntegration:
             client.connect()
 
             # Simulate successful connection
-            client._on_connect(mock_client_instance, None, {}, 0)
+            client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_ACCEPTED)
 
             assert client.is_connected()
 
@@ -105,7 +106,7 @@ class TestDysonMqttClientIntegration:
 
             client = DysonMqttClient(integration_config)
             client.connect()
-            client._on_connect(mock_client_instance, None, {}, 0)
+            client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_ACCEPTED)
 
             # Simulate multiple messages
             for i in range(3):
@@ -148,7 +149,7 @@ class TestDysonMqttClientIntegration:
             client.connect()
 
             # Simulate connection failure
-            client._on_connect(mock_client_instance, None, {}, 5)  # Connection refused
+            client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_REFUSED_NOT_AUTHORIZED)
 
             assert not client.is_connected()
 
@@ -168,7 +169,7 @@ class TestDysonMqttClientIntegration:
             client._max_queue_size = 5  # Set small queue for testing
 
             client.connect()
-            client._on_connect(mock_client_instance, None, {}, 0)
+            client._on_connect(mock_client_instance, None, {}, ConnackCode.CONNACK_ACCEPTED)
 
             # Send more messages than queue can hold
             for i in range(10):
